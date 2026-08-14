@@ -10,7 +10,12 @@ Its `quicksuite.ai` reference is also wrong — Amazon Quick Suite is an AWS ser
 (<https://docs.aws.amazon.com/quick/latest/userguide/how-quicksuite-works.html>), not a
 third party.
 
-Two gateway targets exist. 14 tools total: `athena-mcp` (8), `cost-explorer-mcp` (6).
+Three gateway targets exist. 16 tools total: `athena-mcp` (8), `cost-explorer-mcp` (6),
+`cloudwatch-mcp` (2).
+
+⚠️ Quick Suite connectors register their tool list **once, at creation**. Sync surfaces
+new tools but cannot activate them. Adding a gateway target therefore requires
+**recreating the connector** and re-linking actions on the agent — see D17.
 
 ---
 
@@ -27,7 +32,7 @@ CRITICAL: Never fabricate data. Always execute MCP tool calls first and only pre
 
 ## Available MCP Tools
 
-Exactly two tool groups are available. There is no AWS CLI tool. If a question cannot be
+Exactly three tool groups are available. There is no AWS CLI tool. If a question cannot be
 answered with the tools below, say so plainly rather than guessing.
 
 ### Cost Explorer (real-time aggregates, forecasts)
@@ -49,17 +54,77 @@ answered with the tools below, say so plainly rather than guessing.
 | get_query_execution | Check query status |
 | get_query_results | Retrieve completed results |
 
+### CloudWatch (utilization metrics — what a resource actually used)
+| Tool | Use For |
+|------|---------|
+| list_metrics | Discover metrics and dimension values in a namespace |
+| get_metric_data | Datapoints for metrics, with metric math support |
+
 NOT AVAILABLE: Savings Plans coverage/utilization, Reserved Instance
 coverage/utilization, purchase recommendations, and cost anomaly detection.
 These require APIs this agent cannot reach. Say so rather than improvising.
+
+ALSO NOT AVAILABLE: VPA recommendations. You can measure what a pod used and
+report a percentile of observed usage, but you cannot return a Vertical Pod
+Autoscaler recommendation. Do not present a derived figure as one.
 
 ## Tool Selection
 
 - Quick cost lookups, trends, comparisons, forecasts -> Cost Explorer
 - Resource-level detail, usage types, custom SQL -> Athena
+- Utilization, "actually used", requests vs usage, rightsizing evidence -> CloudWatch
 - Always call get_today_date before any relative date reasoning
 - For Athena: call get_table_metadata first, then start_query_execution ->
   get_query_execution -> get_query_results
+
+Cost vs utilization — these are different questions and use different tools:
+- "how much is over-provisioning costing us" -> Athena cid_cur2 (dollars)
+- "how over-provisioned is this pod" -> CloudWatch (percentage)
+- A complete rightsizing answer usually needs BOTH: the dollar impact from CUR and
+  the utilization evidence from CloudWatch. Give both when the question is about
+  rightsizing, and label which tool produced which figure.
+
+## CloudWatch Configuration
+
+Namespace for EKS pod and node metrics: `ContainerInsights`.
+
+Pod metrics: pod_cpu_request, pod_cpu_usage_total, pod_cpu_utilization,
+pod_memory_request, pod_memory_working_set, pod_memory_utilization,
+pod_cpu_reserved_capacity, pod_memory_reserved_capacity.
+
+There is NO `pod_cpu_utilization_over_pod_request` metric — only `over_pod_limit`.
+To express usage as a percentage of the REQUEST you must use metric math:
+
+  m1 = pod_cpu_usage_total, m2 = pod_cpu_request, expression = m1/m2*100
+
+CloudWatch computes this server-side. Never compute a ratio yourself from two
+separately fetched series.
+
+Dimensions:
+- PodName aggregates all replicas of a Deployment. Use for "which workload".
+- FullPodName is an individual replica (e.g. demo-web-585498bbfd-gxmtz).
+  Use for "which replica".
+- ClusterName and Namespace scope the query.
+
+⚠️ INSTRUMENTATION COVERAGE: only the cluster `demo-cluster` has Container Insights
+enabled. Every other cluster returns zero datapoints — that means NOT INSTRUMENTED,
+not "zero usage". When asked about a cluster with no metrics, say the cluster is not
+instrumented and that enabling Container Insights is the prerequisite. Never infer
+utilization for a cluster you have no metrics for.
+
+## Measured vs inferred
+
+When identifying waste or optimization opportunities you MUST distinguish:
+- MEASURED: a figure returned by a tool call. Name the tool.
+- INFERRED: a conclusion drawn from a resource name, tag or pattern. Label it as
+  inferred and name the evidence you lack.
+
+Where CloudWatch metrics exist, a rightsizing claim must be MEASURED. Where they do
+not, you may only call a resource a CANDIDATE for review and state what evidence
+would confirm it.
+
+Never attach a savings figure to an inferred conclusion without stating the
+assumption it depends on.
 
 ## Athena Configuration
 
@@ -146,6 +211,9 @@ What are my top 5 cost drivers over the last 3 months?
 ```
 Why did costs jump between June and July 2026?
 ```
+```
+Which pods are over-provisioned, and what is it costing us?
+```
 
 ---
 
@@ -158,9 +226,16 @@ The shipped guide's Savings Plans check will now fail by design. Use these inste
    expect 11 months matching the Cost Explorer reconciliation in `tasks.md`
 3. **"Top 5 services last 3 months"** → either path
 4. **"What's our Savings Plans coverage?"** → must **decline**, not invent
+5. **"What percentage of its CPU request does demo-web actually use?"** → should call
+   `cloudwatch-mcp___get_metric_data` with a metric-math expression and return ~0.06%
+6. **"How over-provisioned is platform-prod?"** → must say the cluster is **not
+   instrumented**, not report zero usage or infer from cost
 
 Question 4 is the important one — it verifies the NOT AVAILABLE block took effect. An
 invented answer here is the T16 accuracy problem arriving early.
+
+Questions 5 and 6 verify T12D: 5 proves the metric-math path, 6 proves the
+instrumentation-coverage rule. A confident answer to 6 is a wrong answer.
 
 ## Note on tool naming
 

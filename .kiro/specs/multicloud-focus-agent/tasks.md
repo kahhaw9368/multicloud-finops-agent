@@ -311,9 +311,45 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       `PodName` aggregates the Deployment; `FullPodName` is the individual replica
       (`demo-web-585498bbfd-gxmtz`). Use in T12D — "which workload" and "which replica"
       are different questions.
-- [ ] **T12C. Add as a third gateway target** in `mcp_lambda_targets` — same gateway, same
-      Cognito, one connector. 14 → 16 tools. Then `make update-schemas` and **click Sync**
-      in Quick Suite (the one case where Sync is correct — the tool list changed).
+- [x] **T12C. Add as a third gateway target.** ✅ **DONE 2026-08-14.**
+      Applied with **`-target`** isolation on the new target plus
+      `aws_iam_role_policy.gateway_permissions` only — `1 added, 1 changed, 0 destroyed`.
+      The two working targets were never in scope.
+      **Isolation verified:** immediately after apply and *before* `update-schemas`,
+      `athena-mcp` was still **8** tools and `cost-explorer-mcp` still **6**; only
+      `cloudwatch-mcp` sat at the Terraform placeholder of 1. This is the concrete proof
+      that `-target` avoids the D15 schema-stripping trap — a broad apply would have
+      reverted 8→1 and 6→1.
+      `make update-schemas` then reported **3/3 targets**, pushing `cloudwatch-mcp` 1→2
+      and leaving the others unchanged.
+      **Final: 16 tools** — athena-mcp 8, cost-explorer-mcp 6, cloudwatch-mcp 2, all
+      `READY`. Confirmed end-to-end via `tools/list` through the gateway with a live
+      Cognito JWT: `cloudwatch-mcp___get_metric_data`, `cloudwatch-mcp___list_metrics`.
+      Revert point before this step: commit `d0f10a7`.
+
+      ⚠️ **Sync does NOT activate new tools — the connector must be RECREATED.**
+      After `update-schemas`, Quick Suite's Sync surfaced both cloudwatch tools in a
+      read-only **Disabled** table with no toggle. Docs (mcp-integration.html,
+      Limitations): *"Tool lists remain static after initial registration."*
+      Rebuilt as connector `FinOps Gateway v2` on the same endpoint. See D17 for the
+      safe order (create v2 → verify 16 → link to agent → unlink old → delete old).
+      Cognito values for the rebuild: `make show-cognito-creds`.
+
+- [x] **T12E. Grant `athena-mcp` read access to the `cid_cur2` bucket.**
+      ✅ **DONE 2026-08-14.** Surfaced by the live agent: `cur2` queries succeeded but
+      `cid_cur2` failed on S3 permissions. Cause: Athena reads S3 as the CALLER and
+      `cid_cur2` lives in a different bucket from `cur_bucket_name`. T12A added the
+      table to the persona without extending the Lambda policy.
+      New var `additional_cur_bucket_names` (read-only, value in gitignored tfvars).
+      Applied with `-target=module.mcp_athena.aws_iam_role_policy.lambda_permissions`
+      → **0 added, 1 changed, 0 destroyed**; set-comparison of the inline policy
+      before/after showed **0 permissions lost, 6 gained, no Deny**; gateway tool
+      counts unchanged at 8/2/6. Verified: `cid_cur2` query SUCCEEDED,
+      **$28.36 used / $111.99 unused**. Recorded as D18.
+      Note: full-table row count for 2026-08 is **202,703**, not the 26,096 recorded
+      earlier — the cost figures match exactly, so the earlier count was a narrower
+      filter. Reconcile before quoting a row count publicly.
+
 - [ ] **T12D. Update the persona** with routing for utilization questions and the
       measured-vs-inferred rule.
 
