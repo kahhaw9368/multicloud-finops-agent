@@ -393,8 +393,10 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       answer to Soon Wah's question in a form absorbable in five seconds.
       The three MCP Lambdas are grouped as "Built here"; everything behind them is an
       AWS-managed API. That boundary is the credibility line and the extension point.
-      Shows `cur2` vs `cid_cur2` explicitly since that split is the one place the data
-      model shows through in the demo.
+      Shows CUR as a **single generic node** — the two Athena tables behind it (long
+      history + split cost allocation) are an implementation detail the persona routes
+      between, and drawing them costs more audience attention than it returns. The
+      customer wants to see how the system works, not the data model.
       Verified structurally (22 nodes declared, 4 subgraphs balanced, no unbalanced
       brackets or quotes, all class targets resolve). **Not rendered** — no `mmdc` on
       this host; eyeball the render before Wednesday.

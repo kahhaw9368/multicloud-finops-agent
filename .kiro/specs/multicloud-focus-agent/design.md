@@ -35,8 +35,7 @@ flowchart TB
     end
 
     subgraph tables["Cost and usage data"]
-        T1["cur2<br/>CUR 2.0 · 11 months<br/>trend, service, resource"]
-        T2["cid_cur2<br/>split cost allocation<br/>pod level · 1 month"]
+        CURD["CUR 2.0<br/>cost and usage report"]
     end
 
     DE["AWS Data Exports"]
@@ -58,13 +57,11 @@ flowchart TB
     GW --> MW
     MA --> ATH
     ATH --> GLUE
-    GLUE --> T1
-    GLUE --> T2
+    GLUE --> CURD
     MC --> CE
     MW --> CWM
     EKS --> CWM
-    DE --> T1
-    DE --> T2
+    DE --> CURD
 
     GW -.-> COH
     GW -.-> FM
@@ -82,17 +79,22 @@ flowchart TB
 
 Reading it for the demo:
 
-- **Left-to-right down the solid path** is the whole live system: a question in Quick
-  Suite becomes a JWT, a tool call, a Lambda, an AWS API, and a number.
-- **`cur2` versus `cid_cur2`** is the one place the data model shows through. Trend
-  questions need eleven months; pod-level questions need split cost allocation, which
-  exists for one month only. The persona routes between them.
+- **Follow the solid path top to bottom** and you have the whole live system: a question
+  in Quick Suite becomes a JWT, a tool call, a Lambda, an AWS API, and a number.
+- **Three data sources, three answers.** CUR gives cost down to the individual resource,
+  Cost Explorer gives aggregates and forecasts, CloudWatch gives utilization. A
+  rightsizing answer needs cost *and* utilization, which is why both are wired.
 - **`cloudwatch-mcp` is the newest solid box** and the reason utilization questions are
   answerable at all. Before it, the agent could price over-provisioning but not measure
   it.
 - **Every dashed box is a source, not a redesign.** `focus-mcp` supersedes `athena-mcp`
   because the tool is named for the schema it speaks rather than the engine it runs on
   (see `## Gateway targets`); Azure joins by writing into the same `raw/` zone.
+
+The CUR box is deliberately drawn as one node. Two Athena tables sit behind it — a
+long-history table and a split-cost-allocation table for pod-level detail — but that is
+an implementation detail the persona routes between, and putting it on the diagram costs
+more attention than it returns. See `## Athena table` for the actual split.
 
 No account IDs, bucket names or customer names appear in the diagram — see T15.
 
