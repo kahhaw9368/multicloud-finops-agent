@@ -382,9 +382,26 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
 
 ### Demo assets
 
-- [ ] **T13. Architecture diagram — current + future.** One view showing today's CUR 2.0
-      path, and the FOCUS + Azure target state. This is what carries the multicloud
-      buy-in; it is a **deliverable**, not a nice-to-have.
+- [x] **T13. Architecture diagram — current + future.** ✅ **DONE 2026-08-15.**
+      Mermaid `flowchart TB` in `design.md` under `## Architecture`. Scoped to Mermaid
+      deliberately: it renders on GitHub and in Kiro, diffs like code, and cannot go
+      stale silently the way an exported image does.
+      **One topology, two states** — solid = deployed and verified, dashed = roadmap
+      labelled with its task number. Drawn together on purpose: every roadmap item
+      hangs off the same gateway behind the same Cognito path, so the visual claim is
+      "adding a source is adding a Lambda target, not re-architecting". That is the
+      answer to Soon Wah's question in a form absorbable in five seconds.
+      The three MCP Lambdas are grouped as "Built here"; everything behind them is an
+      AWS-managed API. That boundary is the credibility line and the extension point.
+      Shows `cur2` vs `cid_cur2` explicitly since that split is the one place the data
+      model shows through in the demo.
+      Verified structurally (22 nodes declared, 4 subgraphs balanced, no unbalanced
+      brackets or quotes, all class targets resolve). **Not rendered** — no `mmdc` on
+      this host; eyeball the render before Wednesday.
+      Optional polish if wanted later: PNG with official AWS icons via
+      `uv run --with diagrams` (graphviz already installed). Not needed for the demo.
+      No account IDs, bucket names or customer names in the diagram — supports T15.
+      *This carries the multicloud buy-in; it is a deliverable, not a nice-to-have.*
 - [ ] **T14. Demo script.** A short fixed question set that reliably works, ordered to
       tell a story: total trend → service breakdown → the Jun→Jul +19% jump → resource
       detail. Real material available: 12 months $1,420 → $4,182, EKS $5,155 /

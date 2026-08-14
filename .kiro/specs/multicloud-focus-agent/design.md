@@ -1,5 +1,101 @@
 # Design — Multicloud FinOps Agent (FOCUS)
 
+## Architecture
+
+One topology, two states. **Solid = deployed and verified today. Dashed = roadmap,
+labelled with its task number.** The point of drawing them together: every roadmap
+item hangs off the *same* gateway behind the *same* Cognito path, so adding a data
+source is adding a Lambda target — not re-architecting.
+
+The three MCP Lambdas are the only components built here. Everything behind them is
+an AWS-managed API. That boundary is the extension point: the agent's ceiling is the
+set of sources those Lambdas can read.
+
+```mermaid
+flowchart TB
+    subgraph client["Client"]
+        QS["Amazon Quick Suite<br/>chat agent + persona"]
+        CONN["MCP connector<br/>service-to-service OAuth"]
+    end
+
+    COG["Amazon Cognito<br/>client_credentials grant"]
+    GW["Bedrock AgentCore Gateway<br/>16 tools / 3 targets"]
+
+    subgraph built["Built here — MCP Lambda targets"]
+        MA["athena-mcp<br/>8 tools"]
+        MC["cost-explorer-mcp<br/>6 tools"]
+        MW["cloudwatch-mcp<br/>2 tools"]
+    end
+
+    subgraph managed["AWS-managed APIs"]
+        ATH["Amazon Athena"]
+        GLUE["AWS Glue<br/>cur_database"]
+        CE["Cost Explorer"]
+        CWM["CloudWatch Metrics<br/>ContainerInsights"]
+    end
+
+    subgraph tables["Cost and usage data"]
+        T1["cur2<br/>CUR 2.0 · 11 months<br/>trend, service, resource"]
+        T2["cid_cur2<br/>split cost allocation<br/>pod level · 1 month"]
+    end
+
+    DE["AWS Data Exports"]
+    EKS["Amazon EKS<br/>CloudWatch Observability add-on"]
+
+    COH["Cost Optimization Hub<br/>utilization-backed savings — T16"]
+    FM["focus-mcp<br/>replaces athena-mcp — T17"]
+    FZ["focus/ unified FOCUS 1.0 table"]
+    XF["raw to focus transform"]
+    FA["FOCUS 1.0 export<br/>raw/provider=aws — T17"]
+    FAZ["Azure Cost Management<br/>FOCUS 1.0r2 — T19 to T25"]
+    AZM["azure-api-mcp<br/>Azure resource metadata — T26"]
+
+    QS --> CONN
+    CONN -->|"fetch token"| COG
+    CONN -->|"JWT"| GW
+    GW --> MA
+    GW --> MC
+    GW --> MW
+    MA --> ATH
+    ATH --> GLUE
+    GLUE --> T1
+    GLUE --> T2
+    MC --> CE
+    MW --> CWM
+    EKS --> CWM
+    DE --> T1
+    DE --> T2
+
+    GW -.-> COH
+    GW -.-> FM
+    GW -.-> AZM
+    DE -.-> FA
+    FA -.-> XF
+    FAZ -.-> XF
+    XF -.-> FZ
+    FZ -.-> FM
+    MA -.->|"superseded by"| FM
+
+    classDef future stroke-dasharray: 5 5
+    class COH,FM,FZ,XF,FA,FAZ,AZM future
+```
+
+Reading it for the demo:
+
+- **Left-to-right down the solid path** is the whole live system: a question in Quick
+  Suite becomes a JWT, a tool call, a Lambda, an AWS API, and a number.
+- **`cur2` versus `cid_cur2`** is the one place the data model shows through. Trend
+  questions need eleven months; pod-level questions need split cost allocation, which
+  exists for one month only. The persona routes between them.
+- **`cloudwatch-mcp` is the newest solid box** and the reason utilization questions are
+  answerable at all. Before it, the agent could price over-provisioning but not measure
+  it.
+- **Every dashed box is a source, not a redesign.** `focus-mcp` supersedes `athena-mcp`
+  because the tool is named for the schema it speaks rather than the engine it runs on
+  (see `## Gateway targets`); Azure joins by writing into the same `raw/` zone.
+
+No account IDs, bucket names or customer names appear in the diagram — see T15.
+
 ## Gateway targets
 
 | Target | Change | Role |
