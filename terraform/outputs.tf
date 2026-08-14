@@ -27,6 +27,11 @@ output "mcp_athena_lambda_arn" {
   value       = module.mcp_athena.function_arn
 }
 
+output "mcp_cloudwatch_lambda_arn" {
+  description = "CloudWatch metrics MCP Lambda function ARN"
+  value       = module.mcp_cloudwatch.function_arn
+}
+
 output "mcp_target_ids" {
   description = "Map of MCP Lambda target names to their target IDs"
   value       = module.agentcore_gateway.mcp_target_ids
@@ -56,6 +61,7 @@ output "mcp_client_config" {
     targets = {
       cost_explorer = "cost-explorer-mcp"
       athena        = "athena-mcp"
+      cloudwatch    = "cloudwatch-mcp"
     }
   }
 }

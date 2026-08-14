@@ -1,0 +1,98 @@
+[
+  {
+    "name": "list_metrics",
+    "description": "Discover CloudWatch metrics and their dimension values in a namespace. Use this BEFORE get_metric_data to find out which dimensions and values exist. For EKS pod and node utilization use namespace 'ContainerInsights'. Returns metric names plus the distinct values found for each dimension key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "CloudWatch namespace (required). Examples: 'ContainerInsights' for EKS pod/node metrics, 'AWS/EC2', 'AWS/RDS', 'AWS/Lambda'."
+        },
+        "metric_name": {
+          "type": "string",
+          "description": "Optional filter to one metric, e.g. 'pod_cpu_request'."
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "Optional dimension filter as a flat object, e.g. {\"ClusterName\": \"demo-cluster\"}. Only metrics matching all supplied dimensions are returned."
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum metrics to inspect (default 300)."
+        }
+      },
+      "required": ["namespace"]
+    }
+  },
+  {
+    "name": "get_metric_data",
+    "description": "Retrieve CloudWatch metric datapoints, with optional metric math. Returns timestamps, values and a min/max/avg/latest summary. IMPORTANT for rightsizing: Container Insights has no ready-made 'utilization over request' metric (only *_over_pod_limit exists), so compute the ratio with metric math - fetch pod_cpu_usage_total as m1 and pod_cpu_request as m2 with return_data false, then add a query {\"id\": \"e1\", \"expression\": \"m1/m2*100\"}. A result with zero datapoints usually means the resource is not instrumented, not that usage is zero.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "start_time": {
+          "type": "string",
+          "description": "Start of the window, YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ (required). CloudWatch retains 1-minute data for 15 days, 5-minute for 63 days, 1-hour for 455 days."
+        },
+        "end_time": {
+          "type": "string",
+          "description": "End of the window, YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ (required)."
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Simple mode: the namespace for a single metric. Ignored if 'queries' is supplied."
+        },
+        "metric_name": {
+          "type": "string",
+          "description": "Simple mode: the metric name. Ignored if 'queries' is supplied."
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "Simple mode: dimensions as a flat object, e.g. {\"ClusterName\": \"demo-cluster\", \"PodName\": \"demo-web\", \"Namespace\": \"demo-app\"}."
+        },
+        "period": {
+          "type": "integer",
+          "description": "Aggregation period in seconds (default 3600). Must be a multiple of 60."
+        },
+        "stat": {
+          "type": "string",
+          "description": "Statistic: Average, Sum, Minimum, Maximum, SampleCount, or an extended statistic such as p95 or p99. For rightsizing, p95 of usage is a more defensible target than Average."
+        },
+        "queries": {
+          "type": "array",
+          "description": "Advanced mode enabling metric math. Each item is either a raw metric {id, namespace, metric_name, dimensions, stat, period, return_data} or an expression {id, expression, label}. Ids must start with a lowercase letter. Set return_data false on raw metrics that only feed an expression.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identifier, lowercase first letter, e.g. 'm1' or 'e1'."
+              },
+              "namespace": { "type": "string", "description": "Namespace for a raw metric." },
+              "metric_name": { "type": "string", "description": "Metric name for a raw metric." },
+              "dimensions": { "type": "object", "description": "Dimensions as a flat object." },
+              "stat": { "type": "string", "description": "Statistic for a raw metric." },
+              "period": { "type": "integer", "description": "Period in seconds." },
+              "expression": {
+                "type": "string",
+                "description": "Metric math expression referencing other ids, e.g. 'm1/m2*100'."
+              },
+              "label": { "type": "string", "description": "Human-readable label for the result." },
+              "return_data": {
+                "type": "boolean",
+                "description": "Whether to return this series. Defaults true for expressions, false for raw metrics."
+              }
+            },
+            "required": ["id"]
+          }
+        },
+        "scan_by": {
+          "type": "string",
+          "description": "TimestampAscending (default) or TimestampDescending."
+        }
+      },
+      "required": ["start_time", "end_time"]
+    }
+  }
+]

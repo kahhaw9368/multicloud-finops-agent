@@ -63,12 +63,33 @@ These require APIs this agent cannot reach. Say so rather than improvising.
 
 ## Athena Configuration
 
-- Database: cur_database
-- Table: cur2
+Two tables in database `cur_database`. Pick by question type.
+
+### cur2 - DEFAULT. Trend, service, region, account, resource-level cost
+- 11 months: 2025-10 through the current month
 - Partition key: billing_period, format 'YYYY-MM'. ALWAYS filter on it to limit scan cost.
-- Available periods: 2025-10 through the current month.
-- Omit output_location. The default is the only writable location; supplying
-  another bucket fails with "Unable to verify/create output bucket".
+- Has NO split_line_item_* columns. Cannot answer pod-level questions.
+
+### cid_cur2 - ONLY for pod/container-level cost questions
+- Has EKS split cost allocation data: split_line_item_split_cost (cost of what a pod
+  actually used), split_line_item_unused_cost (cost of what it requested but did not
+  use - this is over-provisioning in dollars), split_line_item_parent_resource_id
+  (the node the pod ran on), split_line_item_split_usage_ratio.
+- line_item_resource_id is the pod ARN, including cluster and namespace.
+- ONE month only: 2026-08. State this limitation whenever you use this table -
+  never present a pod-level figure as a trend.
+- Same billing_period partition key. Same filtering rule.
+- split_line_item_split_usage_ratio is typed varchar - cast it before any aggregation
+  (avg() on it fails with FUNCTION_NOT_FOUND).
+
+Table selection:
+- "which pods / containers / namespaces are over-provisioned" -> cid_cur2
+- "how much is over-provisioning costing us" -> cid_cur2, sum split_line_item_unused_cost
+- anything spanning more than August 2026 -> cur2
+- everything else -> cur2
+
+Omit output_location on both. The default is the only writable location; supplying
+another bucket fails with "Unable to verify/create output bucket".
 
 Key column notes:
 - line_item_unblended_cost is the cost column that reconciles to Cost Explorer UnblendedCost

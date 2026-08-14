@@ -230,10 +230,92 @@ without widening the policy first.
       `athena-results/` prefix, which is the only bucket guaranteed to be writable …
       Supplying a different bucket will fail with 'Unable to verify/create output
       bucket'". Upstream knew; the model is warned in-schema. Good sign for T16.
-- [ ] **T12. Create a new QuickSuite agent** and wire the MCP connector using the T10
-      values. Note: a new agent does **not** change the QuickSight account name
-      (`pos-malaysia`) — accepted risk, see design.md.
-      _Done when:_ a natural-language cost question returns real figures end to end.
+- [x] **T12. Create the Quick Suite agent.** ✅ **DONE 2026-08-14.**
+      Connector `FinOps Gateway` created via **Connectors → Create for your team →
+      Model Context Protocol**, Service-to-service OAuth, Public network. Status `Ready`,
+      **14/14 tools** registered and namespaced (`athena-mcp___*`, `cost-explorer-mcp___*`).
+      Validated with **Test action APIs** before building the agent, then end-to-end:
+      the 3-step Athena chain (`start_query_execution` → `get_query_execution` →
+      `get_query_results`) returned all 11 months matching the Cost Explorer
+      reconciliation, and resource-level and Bedrock token-split queries both worked.
+      ⚠️ **The shipped `quicksuite-agent-setup.md` is wrong in two ways** — it says
+      *Integrations* (current UI is **Connectors**) and points at `quicksuite.ai`, framing
+      it as a *"third-party service"*. Amazon Quick Suite is an AWS service
+      (docs.aws.amazon.com/quick). Persona used: `docs/quicksuite-agent-persona.md`.
+
+### Rightsizing capability — added 2026-08-14 after customer question
+
+CelcomDigi's FinOps manager asked whether the demo covers EKS rightsizing at pod, node and
+cluster level. Assessment against live data:
+
+| Level | Available today | Gap |
+|---|---|---|
+| Cluster — idle clusters, efficiency | ✅ cost side (3 × $446.40/mo control plane, `test-old-cluster` surfaced) | utilization |
+| Node — cost, pod→node rollup | ✅ via `split_line_item_parent_resource_id` | utilization, bin-packing |
+| Pod — requests vs usage **cost impact** | ✅ EKS split cost allocation: 26,096 rows, $28.36 used vs **$111.99 unused** | utilization %, target request values |
+
+**Blocker found:** split-cost data is **not** in the demo table. `cur` → `cur2`
+(11 months) has `INCLUDE_SPLIT_COST_ALLOCATION_DATA: FALSE`; `cid-cur2` → `cid_cur2`
+has it TRUE but only **one** partition (2026-08). Trend and pod-rightsizing cannot come
+from the same table.
+
+**Container Insights is already live** on `demo-cluster` (CloudWatch Observability add-on)
+with `pod_cpu_request`, `pod_cpu_usage_total`, `pod_memory_request`,
+`pod_memory_working_set` and the `*_reserved_capacity` variants. Proven computable via
+`GetMetricData` **metric math** (`use/req*100`) — measured last 24h:
+`demo-web` **0.06%**, `demo-api` **0.06%**, `coredns` 1.53%, `cloudwatch-agent` 4.10%
+of requested CPU. Note `pod_cpu_utilization_over_pod_request` does **not** exist — only
+`over_pod_limit` — so the ratio must be computed from the two raw metrics.
+Only `demo-cluster` reports; the other five clusters are uninstrumented.
+
+- [x] **T12A. Add `cid_cur2` to the persona.** ✅ **DONE 2026-08-14.**
+      Live agent updated in the Quick Suite console; `docs/quicksuite-agent-persona.md`
+      updated to match so the file stays the rebuild source of truth.
+      Athena Configuration now describes **two** tables with explicit selection rules:
+      `cur2` (default, 11 months, no `split_line_item_*` columns) and `cid_cur2`
+      (pod/container questions only, **2026-08 alone** — the agent must state that
+      limitation and never present a pod figure as a trend).
+      Also captured: `split_line_item_split_usage_ratio` is typed **varchar** and must be
+      cast before aggregation — `avg()` on it fails with `FUNCTION_NOT_FOUND`.
+      ⚠️ If the console wording differs from the file, align the file — it is what a
+      rebuild would be driven from.
+- [x] **T12B. Build `cloudwatch-mcp` Lambda.** ✅ **DONE 2026-08-14.**
+      `list_metrics` + `get_metric_data` (metric math). Reads the **CloudWatch Metrics
+      API**, not Container Insights specifically; `ContainerInsights` is simply the first
+      namespace targeted. IAM: `cloudwatch:ListMetrics`, `cloudwatch:GetMetricData`
+      (neither supports resource scoping).
+      **Not** the awslabs `cloudwatch-mcp-server`: it ships **stdio**, and Quick requires
+      remote HTTP — *"Local stdio connections are not supported"*. Hosting it would
+      reintroduce the container + AgentCore Runtime + proxy chain deleted in T4.
+
+      **Deployed with `-target=module.mcp_cloudwatch`** — 6 added, 0 changed, 0 destroyed.
+      Gateway and both existing targets deliberately out of scope; `athena-mcp` stayed at
+      8 tools and `cost-explorer-mcp` at 6 throughout.
+
+      **Tested directly via `aws lambda invoke`** with a synthetic
+      `--client-context` (`{"custom":{"bedrockAgentCoreToolName":"cloudwatch-mcp___<tool>"}}`),
+      bypassing the gateway entirely:
+      - `list_metrics` → 200, 42 metrics, dimensions enumerated
+      - `get_metric_data` simple → 200, 24 pts, `pod_cpu_request` = 50 millicores
+      - `get_metric_data` **metric math** (`m1/m2*100`) → 200, `demo-web` at **0.059%**
+        of requested CPU — matches the direct CLI measurement (0.0592 vs 0.0591), so the
+        Lambda passes the expression through and CloudWatch computes it
+      - uninstrumented cluster → 0 datapoints **plus** the "not instrumented" note
+      - bad date, start≥end, invalid statistic, invalid query id, missing args, unknown
+        tool → all clean `{"error": ...}` at HTTP 200, **no `FunctionError`**
+
+      That last row matters for agent behaviour: a crash gives the model an opaque
+      failure, a clean message lets it self-correct and retry.
+
+      **Discovery:** `ContainerInsights` exposes **`FullPodName`** as well as `PodName`.
+      `PodName` aggregates the Deployment; `FullPodName` is the individual replica
+      (`demo-web-585498bbfd-gxmtz`). Use in T12D — "which workload" and "which replica"
+      are different questions.
+- [ ] **T12C. Add as a third gateway target** in `mcp_lambda_targets` — same gateway, same
+      Cognito, one connector. 14 → 16 tools. Then `make update-schemas` and **click Sync**
+      in Quick Suite (the one case where Sync is correct — the tool list changed).
+- [ ] **T12D. Update the persona** with routing for utilization questions and the
+      measured-vs-inferred rule.
 
 ### Demo assets
 

@@ -24,6 +24,7 @@ locals {
   tool_schema_files = {
     "cost-explorer-mcp" = "cost_explorer.json"
     "athena-mcp"        = "athena.json"
+    "cloudwatch-mcp"    = "cloudwatch.json"
   }
   mcp_tool_schemas = {
     for name, file in local.tool_schema_files :
@@ -48,6 +49,12 @@ locals {
       description  = "AWS Athena MCP tools"
       lambda_arn   = module.mcp_athena.function_arn
       tool_schemas = local.mcp_tool_schemas["athena-mcp"]
+    },
+    {
+      name         = "cloudwatch-mcp"
+      description  = "CloudWatch metrics MCP tools (utilization, rightsizing signals)"
+      lambda_arn   = module.mcp_cloudwatch.function_arn
+      tool_schemas = local.mcp_tool_schemas["cloudwatch-mcp"]
     },
   ]
 }
@@ -217,6 +224,48 @@ module "cognito_gateway_auth" {
 
 # -----------------------------------------------------------------------------
 # Module 4: AgentCore Gateway
+# CloudWatch Metrics MCP Lambda - utilization and rightsizing signals.
+# Reads the CloudWatch Metrics API; ContainerInsights is simply the first namespace
+# targeted. Metric math (GetMetricData Expression) computes usage-vs-request ratios
+# server-side, because Container Insights exposes no *_over_pod_request metric.
+module "mcp_cloudwatch" {
+  source = "./modules/mcp-lambda"
+
+  project_name        = var.project_name
+  server_name         = "cloudwatch"
+  description         = "CloudWatch metrics MCP tools for utilization and rightsizing analysis"
+  source_file         = "${path.module}/../src/lambda/mcp_servers/cloudwatch/lambda_function.py"
+  aws_region          = var.aws_region
+  timeout             = 60
+  memory_size         = 256
+  gateway_arn_pattern = local.gateway_arn_pattern
+
+  # Metrics live in the deploying account alongside the clusters.
+  cross_account_enabled     = false
+  cross_account_role_arn    = ""
+  cross_account_external_id = ""
+
+  # Neither ListMetrics nor GetMetricData supports resource-level scoping.
+  iam_policy_statements = [
+    {
+      actions = [
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricData"
+      ]
+      resources = ["*"]
+    }
+  ]
+
+  # Security
+  subnet_ids                     = var.enable_vpc ? module.vpc[0].private_subnet_ids : []
+  security_group_ids             = var.enable_vpc ? [module.vpc[0].lambda_security_group_id] : []
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
+  log_retention_in_days          = var.log_retention_in_days
+  lambda_kms_key_arn             = var.lambda_kms_key_arn
+
+  tags = local.common_tags
+}
+
 # -----------------------------------------------------------------------------
 module "agentcore_gateway" {
   source = "./modules/agentcore-gateway"
@@ -243,5 +292,6 @@ module "agentcore_gateway" {
     module.cognito_gateway_auth,
     module.mcp_cost_explorer,
     module.mcp_athena,
+    module.mcp_cloudwatch,
   ]
 }
