@@ -105,9 +105,7 @@ lint-init: ## Initialize tflint plugins (run once after install)
 lint: ## Run tflint (install: brew install tflint)
 	@command -v tflint >/dev/null 2>&1 || { echo "tflint not installed. Run: brew install tflint"; exit 1; }
 	tflint --config $(CURDIR)/$(TF_DIR)/config/.tflint.hcl --chdir $(TF_DIR)
-	tflint --config $(CURDIR)/$(TF_DIR)/config/.tflint.hcl --chdir $(TF_DIR)/modules/agentcore-runtime
 	tflint --config $(CURDIR)/$(TF_DIR)/config/.tflint.hcl --chdir $(TF_DIR)/modules/agentcore-gateway
-	tflint --config $(CURDIR)/$(TF_DIR)/config/.tflint.hcl --chdir $(TF_DIR)/modules/lambda-proxy
 
 # Python linting with ruff (via uv)
 ruff-check: ## Check Python code with ruff

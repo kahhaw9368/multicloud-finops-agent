@@ -13,7 +13,7 @@ An MCP (Model Context Protocol)-enabled agent for Cloud Financial Management (CF
 
 ![Architecture Diagram](docs/images/finops-agent-architecture.png)
 
-All Gateway targets are **Lambda functions**. The `lambda-proxy` Lambda forwards requests to the Bedrock AgentCore Runtime which hosts the aws-api-mcp-server container.
+All Gateway targets are **Lambda functions**, each self-contained — no container runtime and no Marketplace dependency.
 
 ## Deployment Modes
 
@@ -50,19 +50,21 @@ A single `make deploy` creates resources in both accounts. Terraform auto-genera
 
 ## Prerequisites
 
-1. **AWS Marketplace Subscription** - [Subscribe to aws-api-mcp-server](https://aws.amazon.com/marketplace/pp/prodview-lqqkwbcraxsgw) (free, accept terms). For cross-account deployments, subscribe from the **data collection account**.
-2. **CUR 2.0 Export** - [Create a Cost and Usage Report 2.0](https://docs.aws.amazon.com/cur/latest/userguide/cur-create.html) export to Amazon S3 with Athena integration enabled. Ensure the S3 bucket has Block Public Access enabled and server-side encryption configured.
-3. **Identity Provider (IdP)** — *optional*: only needed if you switch to `gateway_auth_type = "CUSTOM_JWT"`. The default (`COGNITO`) auto-provisions a Cognito User Pool + OAuth client for service-to-service callers (QuickSuite, n8n, CI) — no external IdP required. See [Identity Provider Setup](#identity-provider-setup).
-4. **AWS CLI Profiles** - [Named profiles](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html) configured for target account(s)
-5. **Tools** - Terraform >= 1.5.0, [uv](https://docs.astral.sh/uv/), tflint (optional)
+1. **CUR 2.0 Export** - [Create a Cost and Usage Report 2.0](https://docs.aws.amazon.com/cur/latest/userguide/cur-create.html) export to Amazon S3 with Athena integration enabled. Ensure the S3 bucket has Block Public Access enabled and server-side encryption configured.
+2. **Identity Provider (IdP)** — *optional*: only needed if you switch to `gateway_auth_type = "CUSTOM_JWT"`. The default (`COGNITO`) auto-provisions a Cognito User Pool + OAuth client for service-to-service callers (QuickSuite, CI) — no external IdP required. See [Identity Provider Setup](#identity-provider-setup).
+3. **AWS CLI Profiles** - [Named profiles](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html) configured for target account(s)
+4. **Tools** - Terraform >= 1.5.0, [uv](https://docs.astral.sh/uv/), tflint (optional)
+
+> **No AWS Marketplace subscription is required.** The `aws-api-mcp` target and its
+> AgentCore Runtime container were removed — all Gateway targets are now
+> self-contained Lambda functions.
 
 ## Quick Start
 
 This deploys the AWS FinOps Agent infrastructure:
 - AgentCore Gateway with JWT authentication
-- AWS Lambda functions (cost-explorer-mcp, athena-mcp, lambda-proxy)
+- AWS Lambda functions (cost-explorer-mcp, athena-mcp)
 - IAM roles and policies (including the management-account role consumed by `cost-explorer-mcp`, if cross-account mode is configured)
-- AgentCore Runtime (aws-api-mcp-server container)
 
 **Not included:** QuickSuite requires manual setup after deployment. See [QuickSuite Agent Setup](docs/quicksuite-agent-setup.md).
 
@@ -223,7 +225,6 @@ After deployment, configure your MCP client (QuickSuite) to connect to the gatew
 
 | Target                         | Description                                       |
 | ------------------------------ | ------------------------------------------------- |
-| `aws-api-mcp`                  | AWS API MCP server (Marketplace) — `call_aws`, `suggest_aws_commands` |
 | `cost-explorer-mcp`            | AWS Cost Explorer API (6 tools)                   |
 | `athena-mcp`                   | Athena queries (8 tools)                          |
 

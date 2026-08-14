@@ -2,17 +2,13 @@
 # AIOps MCP Gateway Proxy - Main Configuration
 # -----------------------------------------------------------------------------
 # This Terraform configuration deploys:
-# 1. AgentCore Runtime - aws-api-mcp-server from AWS Marketplace
-# 2. Lambda Proxy - Translates Gateway calls to InvokeAgentRuntime API
-# 3. MCP Lambda Servers - test, cost_explorer, athena
-# 4. AgentCore Gateway - Exposes MCP endpoint for external clients
+# 1. MCP Lambda Servers - test, cost_explorer, athena
+# 2. AgentCore Gateway - Exposes MCP endpoint for external clients
 # -----------------------------------------------------------------------------
 
 data "aws_caller_identity" "current" {}
 
 locals {
-  container_uri = "${var.mcp_server_image_registry}:${var.mcp_server_image_version}"
-
   common_tags = merge(var.tags, {
     Environment = var.environment
     Project     = var.project_name
@@ -24,10 +20,8 @@ locals {
   # Tool schemas loaded from JSON files.
   # Single source of truth for (target name -> schema filename). Add a target
   # here and the gateway registration + `gateway_target_schemas` output stay
-  # in sync. `aws-api-mcp` is listed in outputs.tf since its target lives in
-  # the agentcore-gateway module, not `mcp_lambda_targets`.
+  # in sync.
   tool_schema_files = {
-    "test-mcp"          = "test.json"
     "cost-explorer-mcp" = "cost_explorer.json"
     "athena-mcp"        = "athena.json"
   }
@@ -43,12 +37,6 @@ locals {
 # gateway_target_schemas output consume the same list — no drift.
 locals {
   mcp_lambda_targets = [
-    {
-      name         = "test-mcp"
-      description  = "Simple test MCP tools (hello, echo)"
-      lambda_arn   = module.mcp_test.function_arn
-      tool_schemas = local.mcp_tool_schemas["test-mcp"]
-    },
     {
       name         = "cost-explorer-mcp"
       description  = "AWS Cost Explorer MCP tools"
@@ -79,72 +67,8 @@ module "vpc" {
 }
 
 # -----------------------------------------------------------------------------
-# Module 1: AgentCore Runtime (MCP Server)
+# Module 1: MCP Lambda Servers
 # -----------------------------------------------------------------------------
-module "agentcore_runtime" {
-  source = "./modules/agentcore-runtime"
-
-  project_name   = var.project_name
-  aws_region     = var.aws_region
-  container_uri  = local.container_uri
-  aws_policy_arn = var.runtime_aws_policy_arn
-
-  tags = local.common_tags
-}
-
-# -----------------------------------------------------------------------------
-# Module 2: Lambda Proxy Function
-# -----------------------------------------------------------------------------
-module "lambda_proxy" {
-  source = "./modules/lambda-proxy"
-
-  project_name = var.project_name
-  aws_region   = var.aws_region
-  runtime_arn  = module.agentcore_runtime.runtime_arn
-  timeout      = var.lambda_timeout
-  memory_size  = var.lambda_memory_size
-
-  # Security
-  subnet_ids                     = var.enable_vpc ? module.vpc[0].private_subnet_ids : []
-  security_group_ids             = var.enable_vpc ? [module.vpc[0].lambda_security_group_id] : []
-  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
-  log_retention_in_days          = var.log_retention_in_days
-  lambda_kms_key_arn             = var.lambda_kms_key_arn
-
-  tags = local.common_tags
-
-  depends_on = [module.agentcore_runtime]
-}
-
-# -----------------------------------------------------------------------------
-# Module 3: MCP Lambda Servers
-# -----------------------------------------------------------------------------
-
-# Test MCP Lambda - Simple tools for Gateway verification
-module "mcp_test" {
-  source = "./modules/mcp-lambda"
-
-  project_name        = var.project_name
-  server_name         = "test"
-  description         = "Simple test MCP tools (hello, echo) for Gateway verification"
-  source_file         = "${path.module}/../src/lambda/mcp_servers/test/lambda_function.py"
-  aws_region          = var.aws_region
-  timeout             = 30
-  memory_size         = 128
-  gateway_arn_pattern = local.gateway_arn_pattern
-
-  # No special permissions needed for test tools
-  iam_policy_statements = []
-
-  # Security
-  subnet_ids                     = var.enable_vpc ? module.vpc[0].private_subnet_ids : []
-  security_group_ids             = var.enable_vpc ? [module.vpc[0].lambda_security_group_id] : []
-  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
-  log_retention_in_days          = var.log_retention_in_days
-  lambda_kms_key_arn             = var.lambda_kms_key_arn
-
-  tags = local.common_tags
-}
 
 # Cost Explorer MCP Lambda - AWS cost analysis tools
 module "mcp_cost_explorer" {
@@ -297,8 +221,7 @@ module "cognito_gateway_auth" {
 module "agentcore_gateway" {
   source = "./modules/agentcore-gateway"
 
-  project_name        = var.project_name
-  lambda_function_arn = module.lambda_proxy.function_arn
+  project_name = var.project_name
   # Gateway only knows CUSTOM_JWT / AWS_IAM / NONE — COGNITO is a wrapper that
   # auto-provisions a Cognito IdP and then routes through the CUSTOM_JWT path.
   auth_type = var.gateway_auth_type == "COGNITO" ? "CUSTOM_JWT" : var.gateway_auth_type
@@ -318,8 +241,6 @@ module "agentcore_gateway" {
 
   depends_on = [
     module.cognito_gateway_auth,
-    module.lambda_proxy,
-    module.mcp_test,
     module.mcp_cost_explorer,
     module.mcp_athena,
   ]

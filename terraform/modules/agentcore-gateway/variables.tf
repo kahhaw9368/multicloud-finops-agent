@@ -7,11 +7,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "lambda_function_arn" {
-  description = "ARN of the Lambda proxy function"
-  type        = string
-}
-
 variable "auth_type" {
   description = "Authentication type: CUSTOM_JWT, AWS_IAM, or NONE"
   type        = string

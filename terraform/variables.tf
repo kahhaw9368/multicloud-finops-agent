@@ -19,22 +19,6 @@ variable "aws_region" {
 }
 
 # -----------------------------------------------------------------------------
-# MCP Server Configuration
-# -----------------------------------------------------------------------------
-
-variable "mcp_server_image_version" {
-  description = "Version of aws-api-mcp-server from AWS Marketplace. Check: https://aws.amazon.com/marketplace/pp/prodview-lqqkwbcraxsgw"
-  type        = string
-  default     = "1.2.0"
-}
-
-variable "mcp_server_image_registry" {
-  description = "ECR registry for aws-api-mcp-server (AWS Marketplace)"
-  type        = string
-  default     = "709825985650.dkr.ecr.us-east-1.amazonaws.com/amazon-web-services/aws-api-mcp-server"
-}
-
-# -----------------------------------------------------------------------------
 # Lambda Configuration
 # -----------------------------------------------------------------------------
 
@@ -124,12 +108,6 @@ variable "tags" {
     Project   = "AWS FinOps Agent"
     ManagedBy = "Terraform"
   }
-}
-
-variable "runtime_aws_policy_arn" {
-  description = "AWS managed policy ARN to attach to runtime role (e.g., ReadOnlyAccess)"
-  type        = string
-  default     = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 }
 
 # -----------------------------------------------------------------------------

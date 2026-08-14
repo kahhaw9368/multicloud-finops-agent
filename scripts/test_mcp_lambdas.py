@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test script for MCP Lambda functions.
-Tests the test-mcp, cost-explorer-mcp, and athena-mcp Lambda functions.
+Tests the cost-explorer-mcp and athena-mcp Lambda functions.
 """
 
 import base64
@@ -43,24 +43,6 @@ def invoke_mcp_lambda(function_name: str, target_name: str, tool_name: str, payl
         raise
 
 
-def test_test_mcp():
-    """Test the test-mcp Lambda."""
-    print("\n" + "=" * 60)
-    print("Testing: test-mcp Lambda")
-    print("=" * 60)
-
-    # Test hello tool
-    print("\n[1] hello tool...")
-    result = invoke_mcp_lambda(f"{PROJECT_NAME}-test-mcp", "test-mcp", "hello", {"name": "Claude"})
-    print(f"Result: {json.dumps(result, indent=2)}")
-
-    # Test echo tool
-    print("\n[2] echo tool...")
-    result = invoke_mcp_lambda(
-        f"{PROJECT_NAME}-test-mcp", "test-mcp", "echo", {"message": "Hello from MCP Gateway!"}
-    )
-    print(f"Result: {json.dumps(result, indent=2)}")
-
 
 def test_cost_explorer_mcp():
     """Test the cost-explorer-mcp Lambda."""
@@ -99,7 +81,7 @@ def main():
     print("=" * 60)
 
     failures = []
-    for test_fn in [test_test_mcp, test_cost_explorer_mcp, test_athena_mcp]:
+    for test_fn in [test_cost_explorer_mcp, test_athena_mcp]:
         try:
             test_fn()
         except Exception as e:

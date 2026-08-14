@@ -22,11 +22,6 @@ output "gateway_url" {
   value       = aws_bedrockagentcore_gateway.mcp.gateway_url
 }
 
-output "target_id" {
-  description = "ID of the Gateway Target"
-  value       = aws_bedrockagentcore_gateway_target.lambda.target_id
-}
-
 output "role_arn" {
   description = "IAM Role ARN used by the Gateway"
   value       = aws_iam_role.gateway.arn
