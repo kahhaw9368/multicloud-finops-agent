@@ -147,7 +147,7 @@ module "mcp_athena" {
     CUR_OUTPUT_LOCATION = var.cur_athena_output_location != "" ? var.cur_athena_output_location : "s3://${var.cur_bucket_name}/athena-results/"
   }
 
-  iam_policy_statements = [
+  iam_policy_statements = concat([
     {
       actions = [
         "athena:StartQueryExecution",
@@ -192,7 +192,25 @@ module "mcp_athena" {
       ]
       resources = ["*"]
     }
-  ]
+    ],
+    # Read-only access to any additional export buckets (e.g. a CID/split-cost
+    # export in its own bucket). Athena reads S3 as the caller, so a Glue table
+    # outside cur_bucket_name fails with an S3 permission error without this.
+    length(var.additional_cur_bucket_names) > 0 ? [
+      {
+        actions = [
+          "s3:GetBucketLocation",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        resources = flatten([
+          for b in var.additional_cur_bucket_names : [
+            "arn:aws:s3:::${b}",
+            "arn:aws:s3:::${b}/*"
+          ]
+        ])
+      }
+  ] : [])
 
   # Security
   subnet_ids                     = var.enable_vpc ? module.vpc[0].private_subnet_ids : []

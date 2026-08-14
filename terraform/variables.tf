@@ -155,6 +155,20 @@ variable "cur_athena_output_location" {
   default     = ""
 }
 
+variable "additional_cur_bucket_names" {
+  description = <<-EOT
+    Extra S3 buckets holding CUR/Data Exports data that Athena tables point at,
+    beyond cur_bucket_name. Granted READ-ONLY (GetObject/ListBucket/GetBucketLocation)
+    to the athena-mcp Lambda role. Athena reads S3 with the CALLER's identity, so any
+    Glue table in a bucket absent from this list fails at query time with an S3
+    permission error even though the table and partitions resolve correctly.
+    Set this whenever you register a second export (e.g. a CID/split-cost export in
+    its own bucket).
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 # -----------------------------------------------------------------------------
 # VPC Configuration
 # -----------------------------------------------------------------------------
