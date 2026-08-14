@@ -196,45 +196,78 @@ Recommendations are the one class where a *unified* tool would need real normali
 
 ## The two genuinely new components
 
-### 1. Entra authentication — solved, and better than expected
+### 1. Entra authentication — documented, not a workaround
 
 Every tool today uses the Lambda IAM execution role: no credentials to manage. Azure needs
 an Entra token, which historically meant a stored service-principal secret.
 
-**AWS IAM Outbound Identity Federation (launched 19 Nov 2025) removes the secret.** AWS
-provisions a per-account OIDC issuer at `https://<uuid>.tokens.sts.global.api.aws` with
-discovery and JWKS endpoints. The flow:
+**That is no longer true, and Microsoft documents the AWS case explicitly.** The Entra
+workload-identity-federation concepts page (updated 2025-04-09) lists AWS as a supported
+scenario verbatim: *"Workloads running in Amazon Web Services (AWS). First, configure a
+trust relationship between your user-assigned managed identity or app in Microsoft Entra ID
+and your AWS account using IAM Outbound Identity Federation."* `[DOCUMENTED]`
+<https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation>
 
-1. Lambda role gets `sts:GetWebIdentityToken`.
-2. Lambda calls STS `GetWebIdentityToken` with `Audience=api://AzureADTokenExchange` and
-   `SigningAlgorithm=RS256`. Returns a JWT with `iss` = the AWS issuer,
-   `sub` = `arn:aws:iam::<acct>:role/<LambdaRole>`.
-3. Entra app registration carries a **federated identity credential** ("Other issuer") with
-   matching `issuer`, `subject`, and `audiences = api://AzureADTokenExchange`.
-4. Lambda exchanges it at Entra's token endpoint with
-   `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`.
+The flow:
 
-**No stored secret, nothing to rotate.** A flexible federated credential (preview) allows
-claim-matching wildcards across roles, but is app-registration-only — not available on
-user-assigned managed identities.
+1. Enable once per AWS account — `EnableOutboundWebIdentityFederation` returns an
+   account-specific `IssuerUrl` hosting `/.well-known/openid-configuration` and
+   `/.well-known/jwks.json`.
+2. Lambda execution role gets `sts:GetWebIdentityToken`. At runtime the Lambda calls it with
+   `Audience=api://AzureADTokenExchange`, `SigningAlgorithm` of `RS256` **or** `ES384`, and
+   `DurationSeconds` between 60 and 3600.
+3. The returned JWT carries `sub` = the IAM principal ARN, plus extra claims including
+   `org_id`, `principal_tags` and **`lambda_source_function_arn`** — that last one means the
+   trust can be scoped to an individual function, not merely a role.
+4. Entra app registration carries a **federated identity credential** created via Graph v1.0
+   `POST /applications/{objectId}/federatedIdentityCredentials` with `issuer`, `subject`,
+   and `audiences: ["api://AzureADTokenExchange"]`.
+5. Lambda exchanges it at `POST https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`
+   with `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` and
+   `grant_type=client_credentials`.
 
-⚠️ *[COMPOSED INFERENCE.]* Each half is first-party documented and a Microsoft
-TechCommunity post corroborates the AWS→Entra pattern, but no single Microsoft doc lists
-AWS's issuer as pre-blessed. **Validate the exact `iss`/`sub`/`aud` claims against a live
-token in a test tenant before committing.** Fallback is a client secret in Secrets Manager
-with rotation.
+**No stored secret, nothing to rotate.** AWS manages the issuer and its JWKS.
 
-RBAC for read-only, at subscription or management-group scope:
+Operational details that will bite if missed:
 
-| Target | Built-in role |
-|---|---|
-| Cost Management | `Cost Management Reader` |
-| Azure Monitor metrics | `Monitoring Reader` |
-| Log Analytics query | `Log Analytics Reader` |
-| Azure Advisor | `Reader` — Advisor has no dedicated role |
+- **`GetWebIdentityToken` is not available on the STS global endpoint** — use a regional one.
+- **`iss`, `sub` and `aud` must match the credential case-sensitively.** Max 20 federated
+  credentials per app, `issuer`/`subject` capped at 600 chars, and Entra stores only the
+  first 100 signing keys from the issuer.
+- **You need at least two access tokens.** Client credentials issues one resource per token,
+  and the targets have different audiences: `https://management.azure.com/.default` covers
+  Cost Management, Monitor metrics and Advisor, but the Log Analytics query API needs
+  `https://api.loganalytics.io/.default`.
+- These AWS-issued JWTs cannot be used for inbound OIDC back into AWS.
+- A preview "flexible" federated credential allows a `claimsMatchingExpression` instead of a
+  fixed subject, but is app-registration-only — not available on user-assigned managed
+  identities.
 
-Enterprise caveat: many tenants block secret credentials or apply conditional access to
-service principals. Federation is the friendlier path politically as well as operationally.
+RBAC for read-only, assigned to the app's service principal:
+
+| Target | Built-in role | Scope |
+|---|---|---|
+| Cost Management | `Cost Management Reader` (`72fafb9e-0641-4937-9268-a91bfd8191a3`) | Subscription or management group |
+| Log Analytics query | `Log Analytics Data Reader` (`3b03c2da-16b3-4a49-8834-0f8130efdd3b`) | **Workspace** — tightest fit |
+| Azure Monitor metrics | `Monitoring Reader` (`43d0d8ad-25c7-4714-9337-8ba259a9fe05`) | Subscription |
+| Azure Advisor | **already covered** — `Cost Management Reader` includes `Microsoft.Advisor/recommendations/read` | — |
+
+Advisor needs no separate role: `Cost Management Reader` grants Advisor recommendation reads
+explicitly. There is no dedicated Advisor read-only role; "Advisor Reviews Reader" is
+resiliency-scoped and does not cover general recommendations.
+
+⚠️ **One unresolved permission question.** The Cost Management **Query** API is invoked as
+`Microsoft.CostManagement/query/action`, but `Cost Management Reader` grants
+`Microsoft.CostManagement/*/read`. On a strict reading those do not match. In practice the
+Reader role is widely reported to run queries and Microsoft describes it as "view cost data
+and configuration". **Verify with a live role assignment and a test query**; documented
+fallback is `Cost Management Contributor`.
+
+⚠️ **Two enterprise tenant policies commonly decide this for you.** A tenant app-management
+policy blocking custom passwords makes the client-secret path impossible outright — which is
+an argument *for* federation rather than against it. Separately, Conditional Access for
+workload identities can gate service-principal sign-in by named location, so AWS egress
+ranges may need allowlisting.
 
 ### 2. Cluster-plane access — the real architectural novelty
 
@@ -260,14 +293,25 @@ Two ways to avoid it, both worth considering before proposing cluster access:
 ## What is NOT achievable on Azure
 
 **Per-pod cost in dollars.** AKS cost analysis (OpenCost-based, GA, free) reaches
-**namespace**, not pod — and it is a **portal-only Cost analysis view**. There is no
-documented path for namespace attribution to reach Cost Management exports, standard or
-FOCUS. Azure's nearest analogue to "requested but unused" is the `Idle charges` dimension,
-reported at cluster/namespace level as idle *capacity*, not a per-pod requested-minus-used
-delta.
+**cluster, namespace and workload** level — Microsoft states it *"focuses primarily on
+cluster, namespace, and workload-level costs, rather than individual pod-level costs"* — and
+it is a **portal-only Cost analysis view**. There is no documented path for that attribution
+to reach Cost Management exports, standard or FOCUS. Azure's nearest analogue to "requested
+but unused" is the `Idle charges` dimension ("the cost of available resource capacity that
+isn't used by any workloads"), with `Unallocated charges` for what could not be mapped to a
+namespace — both currency-denominated, both cluster/namespace level, and both portal
+concepts rather than export columns.
 
-*[Strong inference — the docs describe it exclusively as a portal experience and no export
-schema lists a Kubernetes column, but there is no explicit "not exported" statement.]*
+The full Microsoft FOCUS schema was read across 1.0, 1.0r2, 1.2-preview and 1.0-preview:
+**no column, standard or `x_`-prefixed, references a Kubernetes namespace, pod, controller
+or workload.** `x_CostAllocationRuleName` exists but refers to manual Cost Management
+allocation rules, unrelated to the AKS add-on. An AKS cluster appears in exports only as its
+underlying Azure resources — nodes, disks, load balancers.
+
+*[Granularity, idle definitions and the FOCUS schema absence are all verified. The one
+inference is that namespace attribution is excluded from exports: the docs describe it
+exclusively as a portal experience and no export schema lists a Kubernetes column, but there
+is no explicit "not exported" sentence.]*
 
 Consequence: the `$28.36 used / $111.99 unused` per-pod framing has **no managed Azure
 equivalent**. Reaching parity would mean self-hosting OpenCost or Kubecost — which is
@@ -289,7 +333,8 @@ the persona routes on question type and each tool hides its cloud.
 
 The thing to raise early is not effort but **access**: reading sizing targets means
 reaching into a cluster, and that decision belongs to their platform and security teams
-long before it belongs to us.
+long before it belongs to us. Authentication, by contrast, is a solved problem — Microsoft
+documents the AWS federation path and it needs no stored secret.
 
 ## Verification status
 
@@ -300,8 +345,15 @@ long before it belongs to us.
 | AKS VPA GA, `updateMode: Off`, CRD recommendation fields | ✅ Verified |
 | Advisor API paths, `extendedProperties.savingsAmount`, AKS rec IDs | ✅ Verified |
 | Advisor has no action-verb enum, subscription-scoped List only | ✅ Verified |
-| AKS cost analysis reaches namespace only | ✅ Verified |
-| AKS namespace cost absent from exports / FOCUS | ⚠️ Strong inference from documentary silence |
-| AWS Outbound Identity Federation → Entra FIC end-to-end | ⚠️ Composed from two documented halves — **test live** |
+| AKS cost analysis reaches cluster/namespace/workload, not pod | ✅ Verified — quoted from Microsoft |
+| `Idle charges` / `Unallocated charges` definitions | ✅ Verified |
+| FOCUS schema has no Kubernetes columns (1.0, 1.0r2, 1.2-preview) | ✅ Verified — full schema read |
+| AKS namespace cost absent from exports | ⚠️ Strong inference from documentary silence |
+| **AWS → Entra federation supported** | ✅ **Verified — Microsoft lists AWS explicitly (page updated 2025-04-09)** |
+| `GetWebIdentityToken` params, JWT claims, FIC fields and limits | ✅ Verified |
+| Two-token audience split (ARM vs Log Analytics) | ✅ Verified from documented audience rules |
+| RBAC role names and GUIDs | ✅ Verified |
+| Cost Management Reader covers the Query `/action` | ⚠️ Action-string mismatch — **test live**, fallback Cost Management Contributor |
+| Tenant policies blocking secrets / CA on workload identities | ✅ Verified |
 | `benefitRecommendations` field schema | ❌ Not fetched |
 | ARM throttling numbers | ❌ Not fetched |
