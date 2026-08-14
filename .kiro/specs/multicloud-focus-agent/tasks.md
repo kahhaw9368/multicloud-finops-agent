@@ -350,8 +350,35 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       earlier — the cost figures match exactly, so the earlier count was a narrower
       filter. Reconcile before quoting a row count publicly.
 
-- [ ] **T12D. Update the persona** with routing for utilization questions and the
-      measured-vs-inferred rule.
+- [x] **T12D. Update the persona** with routing for utilization questions and the
+      measured-vs-inferred rule. ✅ **DONE 2026-08-15.**
+      Written to `docs/quicksuite-agent-persona.md` and confirmed live in the Quick
+      Suite agent — pod-level cost AND CPU percentages both returned correctly.
+
+      Rules added, each from a real failure or discovery:
+      - **Metric math is mandatory.** Container Insights has NO
+        `pod_cpu_utilization_over_pod_request` metric — only `over_pod_limit`. Usage as
+        a percentage of request must be computed server-side from
+        `pod_cpu_usage_total / pod_cpu_request * 100`. Never divide two separately
+        fetched series client-side; their timestamps differ.
+      - **PodName vs FullPodName.** PodName aggregates a Deployment ("which workload");
+        FullPodName is an individual replica ("which replica").
+      - **Instrumentation coverage.** Only `demo-cluster` has Container Insights. Zero
+        datapoints means NOT INSTRUMENTED, not zero usage. The agent must say the
+        cluster is uninstrumented rather than infer utilization.
+      - **VPA recommendations are unavailable.** It may report a percentile of observed
+        usage but must not present that as a VPA recommendation.
+      - **Measured vs inferred.** Tool-call figures name their tool; conclusions drawn
+        from resource names are labelled inferred with the missing evidence stated; no
+        savings figure attaches to an inferred conclusion without its assumption.
+        Origin: the agent had claimed "test-old-cluster suggests a forgotten test
+        environment, save $446" from the name alone.
+      - **Cost vs utilization routing.** Dollars from `cid_cur2`, percentages from
+        CloudWatch, both for a complete rightsizing answer, each labelled by source.
+
+      Verification questions 5 and 6 added to the persona file: Q5 proves the
+      metric-math path (~0.06% for demo-web), Q6 proves the coverage rule (must decline
+      on `platform-prod`). A confident answer to Q6 is a wrong answer.
 
 ### Demo assets
 
