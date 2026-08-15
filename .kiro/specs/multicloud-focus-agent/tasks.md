@@ -404,10 +404,25 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       `uv run --with diagrams` (graphviz already installed). Not needed for the demo.
       No account IDs, bucket names or customer names in the diagram — supports T15.
       *This carries the multicloud buy-in; it is a deliverable, not a nice-to-have.*
-- [ ] **T14. Demo script.** A short fixed question set that reliably works, ordered to
-      tell a story: total trend → service breakdown → the Jun→Jul +19% jump → resource
-      detail. Real material available: 12 months $1,420 → $4,182, EKS $5,155 /
-      QuickSight $2,913 / Bedrock $1,038 across 12+ services and 3 regions.
+- [x] **T14. Demo script.** ✅ **DONE 2026-08-15.**
+      `docs/demo-script-2026-08-19.md` — 8 questions, ~15 min, all figures verified live
+      2026-08-15 09:35.
+      **Q1–Q6 are the demo; Q7–Q8 must FAIL by design** (uninstrumented cluster, Savings
+      Plans coverage). The declines are the credibility moment, not a gap.
+      Two design rules: **fixed periods, never rolling windows** so rehearsal matches
+      performance; and **never quote an August total** — it moved $1,744.47 → $2,083.43
+      in three days.
+      Better Jun→Jul story than the task originally sketched: the +19.4% ($679.98)
+      decomposes to **87% from three services** — Bedrock +$258.95, EKS +$217.41,
+      EC2 +$111.94 — plus DevOpsAgent appearing at $54.42.
+      Includes talking points for **SP/RI** (why absent: 0 SPs / 0 RIs verified; the
+      analysis-vs-recommendation split; 8 CE operations; payer scope; the
+      Unblended-vs-NetAmortized argument that cannot be demoed here) and
+      **Cost Optimization Hub** ($230.23/mo, zero EKS coverage, action-vs-evidence
+      distinction, and the ~$893 idle-EKS finding COH misses entirely).
+      ⚠️ Script warns not to drill into the RDS row — `petclinic-database` shows account
+      `324037304703`, unexplained. Feeds T15.
+
 - [ ] **T15. Leak check.** No Isengard account id in the Cognito domain, token URL, or
       anything on screen. Terminal and console off-screen or sanitised.
 
