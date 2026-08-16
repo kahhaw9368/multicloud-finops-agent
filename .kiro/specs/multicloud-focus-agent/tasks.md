@@ -423,8 +423,61 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       ⚠️ Script warns not to drill into the RDS row — `petclinic-database` shows account
       `324037304703`, unexplained. Feeds T15.
 
-- [ ] **T15. Leak check.** No Isengard account id in the Cognito domain, token URL, or
-      anything on screen. Terminal and console off-screen or sanitised.
+- [~] **T15. Leak check.** ⚠️ **PARTIAL 2026-08-16 — repo clean, on-screen surfaces
+      NOT fully verified.** Do not mark done until the three live checks below pass.
+
+      **✅ VERIFIED CLEAN — repository.** Account ID `008971650536` appears in neither
+      the working tree nor anywhere in full git history (all commits, all branches).
+      No `client_secret` with a value assigned. `terraform.tfstate`, `config/.env`,
+      `config/terraform.tfvars` and `.gateway-token.json` are all gitignored, untracked,
+      and were never committed. Two benign pattern hits: `AKIAIOSFODNN7EXAMPLE` is AWS's
+      documentation example inside a "Never commit these" block, and a base64 PNG in
+      `docs/components.drawio` false-matched the JWT regex.
+
+      **✅ VERIFIED CLEAN — endpoint values.** No account ID in the gateway URL
+      (`finops-mcp-gateway-p6htbtlkjv…`), the Cognito domain (`finops-mcp-demo-aabe23`),
+      the token URL, the client ID, or the Athena output location
+      (`s3://amzn-s3-cur/athena-results/`).
+
+      **🚨 CONFIRMED LEAK — another customer's name in the browser URL.**
+      `us-east-1.quicksight.aws.amazon.com/sn/account/pos-malaysia/start/home`.
+      `pos-malaysia` is a DIFFERENT customer and appears on every page. This is a
+      cross-customer confidentiality exposure, worse than leaking our own account ID.
+      The QuickSight account name is **immutable** — `UpdateAccountSettings` has no
+      `AccountName` parameter and the only change path is unsubscribe + re-subscribe,
+      which deletes assets and users in the Region. **Mitigation: use the "Open in app"
+      button** (drops the address bar), or present full-screen / kiosk mode.
+      This reopens the 2026-08-12 decision to park the account-name issue — at that time
+      it was unclear whether the name rendered anywhere an audience sees. It does.
+
+      **🚨 ALSO ON SCREEN:** the browser bookmarks bar showed `tech-due-diligence`,
+      `Technical Due Dili…`, `Jira Service Mana…`. Hide it (⌘⇧B).
+
+      **🚨 CONFIRMED 2026-08-16 — account ID WILL appear on screen in Q4 and Q5.**
+      Both vectors verified live, both attached to the two best questions in the script:
+      1. **`get_table_metadata` on `cid_cur2` returns the account ID twice:**
+         `parameters['location'] = s3://cid-008971650536-data-local/cur2/008971650536/…`
+         and the same in `storage.location.template`. The persona instructs
+         "call `get_table_metadata` first, then `start_query_execution`", and Quick Suite
+         renders tool output in the expandable step detail. **`cur2` is CLEAN**
+         (`s3://amzn-s3-cur/cur/cur/data`) — only `cid_cur2` leaks.
+         **Fix: the persona already documents `cid_cur2`'s columns explicitly, so the
+         metadata call is redundant for that table — instruct the agent to skip it.**
+      2. **Every resource ARN embeds the account ID.** Verified:
+         `arn:aws:eks:us-east-1:008971650536:cluster/test-old-cluster`,
+         `arn:aws:eks:us-east-1:008971650536:pod/demo-cluster/amazon-cloudwatch/…`,
+         `arn:aws:quicksight:us-east-1:QBS008971650536:application/…`.
+         **Fix: persona rule to present the resource NAME, not the full ARN** — also
+         more readable, so it improves the demo regardless.
+
+      **✅ RESOLVED — `324037304703` is NOT a foreign account.** It is a **linked account
+      in our own organisation**: `bill_payer_account_id = 008971650536` for every row.
+      It runs a spring/dotnet petclinic sample app. July split: 008971650536 =
+      $3,682.71 (282,204 rows) + 324037304703 = $499.77 (111,761 rows) = **$4,182.48**,
+      reconciling exactly to the monthly trend. Not a data-confidentiality issue, and
+      arguably a demo ASSET — it shows the agent reads the whole organisation, not one
+      account. The demo script's "do not drill into the RDS row" warning can be relaxed
+      to "expect a second account ID; it is ours".
 
 ---
 
