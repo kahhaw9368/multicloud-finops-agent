@@ -235,7 +235,92 @@ of idle EKS control planes — **doesn't appear in COH at all.**
 
 ---
 
-# 5. Architecture
+# 5. "Why not just use the AWS FinOps Agent?"
+
+Expect this question — you sell the AWS FinOps Agent as AIOps Champion, so a hollow answer
+costs credibility. **The honest position is not "custom is better." It is that they answer
+different questions, and CelcomDigi probably wants both.**
+
+Source: AWS FinOps Agent FAQ (`w.amazon.com/bin/view/AWS/InsightsAndOptimizations/Product/FinOpsAgent/FAQ/`),
+Public Preview launched **9 June 2026**.
+
+## Three things the first-party agent cannot do today
+
+**1. It cannot query CUR.** Verbatim from the FAQ: *"Can the FinOps Agent query Cost and Usage
+Report (CUR) data? **Not yet.** CUR querying via Amazon Athena is on the roadmap but not
+implemented during Public Preview."*
+
+Its data sources are Cost Explorer, Cost Anomaly Detection, Cost Optimization Hub, Compute
+Optimizer, CloudTrail, Savings Plans and the Pricing API. **No CUR means no EKS split cost
+allocation** — so it cannot produce pod-level cost. And its two recommendation engines both
+exclude EKS: Cost Optimization Hub returns zero EKS recommendations (verified), and Compute
+Optimizer's 14 supported resource types include ECS-on-Fargate but **not** Kubernetes pods.
+
+**→ The AWS FinOps Agent cannot answer Soon Wah's highest-priority question.** That is the
+single cleanest justification, and it is a capability statement, not a criticism.
+
+**2. It is single-payer.** Each agent space is scoped to one AWS account; org-wide visibility
+requires deploying in the payer account. **CelcomDigi has eight payers.** That means eight
+agent spaces today — multi-payer support is an open PFR, not a feature.
+
+**3. It is AWS-only.** Bringing your own MCP servers "to access data from other cloud
+providers" is explicitly roadmap. CelcomDigi's scope is AWS + Azure.
+
+Also worth knowing: **Public Preview, us-east-1 only**, no new Regions during preview, and
+*"not yet in scope for AWS compliance programs."* For a Malaysian telco that is a
+data-residency conversation, not a blocker — but don't let it surface as a surprise.
+
+## What the first-party agent does better — say this out loud
+
+Being straight here is what makes the rest credible.
+
+| | AWS FinOps Agent | This custom agent |
+|---|---|---|
+| Anomaly detection + CloudTrail root cause | ✅ built in | ❌ none |
+| Savings Plans / RI recommendations | ✅ built in | ❌ **the gap in §3** |
+| Cost Optimization Hub + Compute Optimizer | ✅ built in | ❌ not wired |
+| Autonomous — scheduled + event-triggered | ✅ runs when nobody is logged in | ❌ conversational only |
+| Ticket routing to owning teams (Jira/Slack) | ✅ | ❌ |
+| Managed — no Lambda, gateway or Terraform | ✅ | ❌ we operate it |
+| **CUR / resource-level / pod-level cost** | ❌ roadmap | ✅ |
+| **Container Insights utilization** | ❌ | ✅ |
+| **Multi-cloud (Azure via FOCUS)** | ❌ roadmap | ✅ by design |
+| **Multi-payer** | ❌ one space per payer | ✅ reads the org |
+
+Note the symmetry: **its strengths are exactly this agent's gaps, and vice versa.** Anomaly
+detection and SP/RI — the two things missing from what you're demoing — are things the
+product already has.
+
+## The line to use
+
+> "The custom agent isn't a replacement for the AWS FinOps Agent — it's a probe. You asked
+> about pod-level EKS rightsizing and about Azure. The product can't reach either today: it
+> doesn't query CUR yet, and it's AWS-only. So we built the narrowest thing that answers
+> your actual question, and it tells us which data sources are worth connecting.
+>
+> Where the product is stronger, it's clearly stronger — anomaly detection with CloudTrail
+> root-cause analysis, Savings Plans recommendations, autonomous scheduled reporting, ticket
+> routing to the teams that own the resources. I'd want you on that for those workflows.
+>
+> And when the product does get CUR and multi-cloud, most of this becomes a migration rather
+> than a rebuild — because what's valuable here isn't the Lambdas, it's the persona: the
+> routing rules, the measured-versus-inferred discipline, the knowledge of which of your
+> clusters are instrumented. That transfers."
+
+## If he asks "so why not wait for the product?"
+
+Two honest reasons: **it cannot answer the pod-level question on any announced timeline**, and
+**waiting produces no learning.** Every source connected here — split cost allocation,
+Container Insights — is a decision CelcomDigi would have to make anyway, and making it now
+means the requirements are already written when the product catches up.
+
+You also have precedent: at Deriv the same custom approach took quarterly cost reporting from
+four days to about five minutes, with 21 CUR 2.0 query templates and multi-cloud ingestion
+across AWS, GCP, Anthropic and OpenAI. That is the pattern working at another customer.
+
+---
+
+# 6. Architecture
 
 Solid = live today. Dashed = roadmap with task numbers. **Azure omitted deliberately.**
 
@@ -305,7 +390,7 @@ rightsizing answer needs cost *and* utilization — which is why both are wired.
 
 ---
 
-# 6. Before you present
+# 7. Before you present
 
 **🚨 Hide the URL bar.** Your Quick Suite URL reads
 `…/sn/account/pos-malaysia/start/home` — **another customer's name**, visible on every page.
