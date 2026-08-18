@@ -118,18 +118,28 @@ inferred from cost. Pair it with Q5 explicitly: **CUR tells you the over-provisi
 costs $111.99; CloudWatch tells you the pod uses 0.06% of what it asked for.** One gives
 the impact, the other the corrective action. Neither alone answers the question.
 
-## Q7 — "How over-provisioned is the platform-prod cluster?"
+## Q7 — "Show me the CPU utilization over time for the platform-prod cluster."
 
 **It must say the cluster is not instrumented.** Only `demo-cluster` runs Container
-Insights; the other five return zero datapoints.
+Insights (32 datapoints/24h); `platform-prod`, `platform-nonprod` and `test-old-cluster`
+all return zero datapoints.
+
+⚠️ **Wording matters here — do not ask "how over-provisioned is platform-prod".** That
+form is answerable from `cid_cur2` split cost allocation, which derives requests-versus-usage
+from the EKS control plane rather than Container Insights, and the agent will correctly
+report **90.0% wasted**. Asking for *utilization over time* is what isolates the
+CloudWatch-only capability. Verified 2026-08-18.
 
 **Say:** zero datapoints and zero usage look identical to a naive tool. This one knows the
-difference and says so. **The agent's ceiling is the data it can read** — that is the
-frame for the whole engagement, and it lands better as a demonstrated limit than as a
+difference and says so — and notice it still answered the *cost* question for this same
+cluster. Different source, different coverage, kept straight. **The agent's ceiling is the
+data it can read** — that is the frame for the whole engagement, and it lands better as a
+demonstrated limit than as a
 slide.
 
-🚨 **If it returns a confident number here, stop using it for utilization questions.** The
-T12D instrumentation-coverage rule did not take.
+🚨 **If it returns a utilization percentage or a time series here, stop using it for
+utilization questions** — the T12D instrumentation-coverage rule did not take. A *cost*
+figure is not the failure case; that one is real.
 
 ## Q8 — "What is our Savings Plans coverage?"
 
@@ -243,6 +253,6 @@ last week. Additive, not a re-architecture.
 |---|---|
 | "Query started" then stops | Chaining failure — say "check the query status" |
 | Tool not found | Connector actions unlinked — Q1 in warm-up catches this |
-| Confident answer to Q7 | Persona not applied; skip utilization questions |
+| Confident *utilization %* on Q7 | Persona not applied; skip utilization questions (a cost figure is correct) |
 | Pod query fails on permissions | The `cid_cur2` bucket IAM (T12E) — should be fixed |
 | Numbers slightly off on August | Expected, it accrues. Pivot to a closed month |
