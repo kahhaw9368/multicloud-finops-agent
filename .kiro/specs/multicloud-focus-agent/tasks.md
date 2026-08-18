@@ -2,7 +2,7 @@
 
 `[ ]` not started · `[~]` in progress · `[x]` done
 
-**Demo: Wednesday 2026-08-19.** Written Wednesday 2026-08-12 — 7 days.
+**Demo: Thursday 2026-08-20.** Written Wednesday 2026-08-12 — 7 days.
 
 Phase 1 ships a working demo on **CUR 2.0**, which already has 11 months of
 history. FOCUS is switched on now purely so history accumulates; nothing in the
@@ -26,7 +26,7 @@ demo reads it. Accuracy hardening and `focus-mcp` are deliberately post-demo.
 
 ---
 
-## Phase 1 — Demo on CUR 2.0 (by 2026-08-19)
+## Phase 1 — Demo on CUR 2.0 (by 2026-08-20)
 
 ### Data source — already exists, nothing to build
 
@@ -399,13 +399,13 @@ Only `demo-cluster` reports; the other five clusters are uninstrumented.
       customer wants to see how the system works, not the data model.
       Verified structurally (22 nodes declared, 4 subgraphs balanced, no unbalanced
       brackets or quotes, all class targets resolve). **Not rendered** — no `mmdc` on
-      this host; eyeball the render before Wednesday.
+      this host; eyeball the render before the demo.
       Optional polish if wanted later: PNG with official AWS icons via
       `uv run --with diagrams` (graphviz already installed). Not needed for the demo.
       No account IDs, bucket names or customer names in the diagram — supports T15.
       *This carries the multicloud buy-in; it is a deliverable, not a nice-to-have.*
 - [x] **T14. Demo script.** ✅ **DONE 2026-08-15.**
-      `docs/demo-script-2026-08-19.md` — 8 questions, ~15 min, all figures verified live
+      `docs/demo-script-2026-08-20.md` — 8 questions, ~15 min, all figures verified live
       2026-08-15 09:35.
       **Q1–Q6 are the demo; Q7–Q8 must FAIL by design** (uninstrumented cluster, Savings
       Plans coverage). The declines are the credibility moment, not a gap.

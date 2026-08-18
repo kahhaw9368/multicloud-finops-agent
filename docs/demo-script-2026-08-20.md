@@ -1,5 +1,5 @@
 # Demo script — CelcomDigi multicloud FinOps agent
-**Wednesday 19 August 2026** · Amazon Quick Suite → `CelcomDigi FinOps Analyst`
+**Thursday 20 August 2026** · Amazon Quick Suite → `CelcomDigi FinOps Analyst`
 
 All figures verified against live queries **2026-08-15 09:35 +08**. Closed months are
 stable and will not move. **August is still accruing** — it went from `$1,744.47` on

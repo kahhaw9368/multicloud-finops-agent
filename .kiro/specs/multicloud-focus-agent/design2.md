@@ -163,7 +163,7 @@ Contrast with *"we will build a transform for your Azure data"*, which invites f
 questions about who maintains it, what happens when the schema changes, and who is on
 call when it breaks.
 
-**Consequence for the demo: nothing about Azure needs to work on Wednesday.** The AWS
+**Consequence for the demo: nothing about Azure needs to work on demo day.** The AWS
 path runs live; Azure is described as a contract with a named owner.
 
 ## Decision needed

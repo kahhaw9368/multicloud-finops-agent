@@ -19,7 +19,7 @@ totals itself, which is where a cost agent invents numbers.
 
 ## Phasing
 
-**Deadline: Wednesday 2026-08-19.**
+**Deadline: Thursday 2026-08-20.**
 
 **Phase 0 — switch FOCUS on today.** Data Exports does not backfill, so a FOCUS
 export created later permanently loses the intervening months. Nothing in the
