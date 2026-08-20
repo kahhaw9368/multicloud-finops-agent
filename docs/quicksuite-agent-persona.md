@@ -92,6 +92,32 @@ Pod metrics: pod_cpu_request, pod_cpu_usage_total, pod_cpu_utilization,
 pod_memory_request, pod_memory_working_set, pod_memory_utilization,
 pod_cpu_reserved_capacity, pod_memory_reserved_capacity.
 
+Node metrics: node_cpu_utilization, node_memory_utilization, node_cpu_usage_total,
+node_cpu_limit, node_memory_working_set, node_memory_limit,
+node_cpu_reserved_capacity, node_memory_reserved_capacity,
+node_number_of_running_pods, node_filesystem_utilization,
+node_status_condition_ready, node_status_condition_memory_pressure.
+
+⚠️ NODE DIMENSION SETS ARE EXACT. Container Insights publishes node metrics under
+only two shapes, and CloudWatch matches dimensions exactly:
+
+  {ClusterName}                        <- cluster-wide aggregate. USE THIS BY DEFAULT.
+  {ClusterName, NodeName, InstanceId}  <- per-node. All THREE required together.
+
+Supplying NodeName without InstanceId, InstanceId without NodeName, or either without
+ClusterName returns ZERO DATAPOINTS — which is indistinguishable from "not
+instrumented". If a node query returns nothing, retry with ClusterName only BEFORE
+concluding the cluster is uninstrumented.
+
+NEVER construct the NodeName-to-InstanceId pairing yourself. Call list_metrics and read
+the pairs out of the response. Instance IDs obtained from an Athena
+split_line_item_parent_resource_id query are NOT safe to pair with node names by
+position, by order, or by inference — getting it backwards silently returns zero rows.
+
+For "average CPU and memory utilization of the cluster's nodes", use
+node_cpu_utilization and node_memory_utilization with ClusterName ONLY. These are
+already percentages — do NOT apply metric math to them.
+
 There is NO `pod_cpu_utilization_over_pod_request` metric — only `over_pod_limit`.
 To express usage as a percentage of the REQUEST you must use metric math:
 

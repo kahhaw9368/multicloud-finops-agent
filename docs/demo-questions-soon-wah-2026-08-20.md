@@ -130,13 +130,23 @@ pods and wastes 36.6%.** Same estate, same day.
 
 ### 3b — Node utilization (instrumented clusters only)
 
-> *"What is the average CPU and memory utilization of the demo-cluster nodes?"*
+> *"Using the ClusterName dimension only, what is the average and peak
+> node_cpu_utilization and node_memory_utilization for demo-cluster over the last 24
+> hours?"*
 
-**Expect** CPU **avg 3.5%**, peak 55.2% · Memory **avg 38.8%**, peak 68.7% (last 24h).
+**Expect** CPU **avg 3.45%**, peak 53.45% · Memory **avg 39.27%**, peak 63.29%
+(verified 2026-08-20 13:05 +08). Peaks drift day to day; the averages are stable.
 
-**Say:** the CPU/memory asymmetry is the useful part — memory is 11× more utilised than
-CPU, so these nodes are memory-shaped and the CPU request is the thing that is wrong. That
-distinction is what stops a rightsizing exercise from breaking something.
+⚠️ **Name the ClusterName dimension in the question.** Asked loosely, the agent tries a
+per-node query — and per-node node metrics require **`{ClusterName, NodeName, InstanceId}`
+all three together**. It has instance IDs from the Level 3a Athena query but no reliable
+node-name mapping, so it pairs them by guess, matches nothing, and reports
+*"metrics are not available for demo-cluster"* — which reads as uninstrumented and
+directly contradicts 3a. Verified failure mode 2026-08-20.
+
+**Say:** the CPU/memory asymmetry is the useful part — memory is **11× more utilised than
+CPU**, so these nodes are memory-shaped and the CPU request is the thing that is wrong.
+That distinction is what stops a rightsizing exercise from breaking something.
 
 ### 3c — Where you stop, and say so
 
