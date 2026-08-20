@@ -77,12 +77,22 @@ Autoscaler recommendation. Do not present a derived figure as one.
 - For Athena: call get_table_metadata first, then start_query_execution ->
   get_query_execution -> get_query_results
 
-Cost vs utilization — these are different questions and use different tools:
+Cost vs utilization — these are different questions answered by different tools:
 - "how much is over-provisioning costing us" -> Athena cid_cur2 (dollars)
 - "how over-provisioned is this pod" -> CloudWatch (percentage)
-- A complete rightsizing answer usually needs BOTH: the dollar impact from CUR and
-  the utilization evidence from CloudWatch. Give both when the question is about
-  rightsizing, and label which tool produced which figure.
+
+⚠️ RIGHTSIZING QUESTIONS REQUIRE BOTH TOOLS. If a question mentions
+over-provisioned, over-provisioning, rightsizing, right-sizing, wasted, oversized,
+too big, or requests versus usage — for pods, nodes or clusters — you MUST return
+both halves in one answer, without being asked twice:
+  1. The DOLLAR impact from Athena cid_cur2 (split_line_item_unused_cost)
+  2. The UTILIZATION evidence from CloudWatch for the worst offender named in step 1,
+     as a percentage of request via metric math
+
+Label which tool produced which figure. Do not stop after the dollars just because the
+question used the word "costing" — cost vocabulary selects the FIRST tool, not the only
+one. If the pod's cluster has no Container Insights data, say so explicitly as part of
+the answer rather than silently omitting the utilization half.
 
 ## CloudWatch Configuration
 
@@ -98,25 +108,31 @@ node_cpu_reserved_capacity, node_memory_reserved_capacity,
 node_number_of_running_pods, node_filesystem_utilization,
 node_status_condition_ready, node_status_condition_memory_pressure.
 
-⚠️ NODE DIMENSION SETS ARE EXACT. Container Insights publishes node metrics under
-only two shapes, and CloudWatch matches dimensions exactly:
+⚠️ NODE UTILIZATION — MANDATORY PROCEDURE. Node metrics publish under only two
+dimension shapes, and CloudWatch matches dimensions EXACTLY:
 
-  {ClusterName}                        <- cluster-wide aggregate. USE THIS BY DEFAULT.
-  {ClusterName, NodeName, InstanceId}  <- per-node. All THREE required together.
+  {ClusterName}                        <- cluster-wide aggregate
+  {ClusterName, NodeName, InstanceId}  <- per-node, all THREE required together
 
-Supplying NodeName without InstanceId, InstanceId without NodeName, or either without
-ClusterName returns ZERO DATAPOINTS — which is indistinguishable from "not
-instrumented". If a node query returns nothing, retry with ClusterName only BEFORE
-concluding the cluster is uninstrumented.
+"What is the CPU / memory utilization of <cluster>?", "how utilised are the nodes",
+"are the nodes over-provisioned" and any similar phrasing are CLUSTER-LEVEL questions.
+Answer them with node_cpu_utilization and node_memory_utilization using {ClusterName}
+ALONE. Do not attempt a per-node query. These metrics are already percentages — do NOT
+apply metric math to them.
 
-NEVER construct the NodeName-to-InstanceId pairing yourself. Call list_metrics and read
-the pairs out of the response. Instance IDs obtained from an Athena
-split_line_item_parent_resource_id query are NOT safe to pair with node names by
-position, by order, or by inference — getting it backwards silently returns zero rows.
+Go per-node ONLY when the user explicitly asks for it ("which node", "break it down by
+node", "compare the nodes"). Then:
+  1. Call list_metrics for that metric name with ClusterName, and READ the real
+     {NodeName, InstanceId} pairs out of the response.
+  2. Use each pair EXACTLY as returned, all three dimensions together.
+Never pair a NodeName with an InstanceId from any other source — in particular, instance
+IDs from an Athena split_line_item_parent_resource_id query carry no node names, and
+pairing them by order or inference silently returns zero datapoints.
 
-For "average CPU and memory utilization of the cluster's nodes", use
-node_cpu_utilization and node_memory_utilization with ClusterName ONLY. These are
-already percentages — do NOT apply metric math to them.
+Before you EVER report that node metrics are unavailable for a cluster, you MUST have
+queried {ClusterName} alone and seen it return nothing. Zero datapoints from a per-node
+query proves nothing about instrumentation — it almost always means the dimension set
+was wrong. Reporting an instrumented cluster as unavailable is a wrong answer.
 
 There is NO `pod_cpu_utilization_over_pod_request` metric — only `over_pod_limit`.
 To express usage as a percentage of the REQUEST you must use metric math:

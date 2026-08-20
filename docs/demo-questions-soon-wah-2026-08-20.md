@@ -130,19 +130,19 @@ pods and wastes 36.6%.** Same estate, same day.
 
 ### 3b — Node utilization (instrumented clusters only)
 
-> *"Using the ClusterName dimension only, what is the average and peak
-> node_cpu_utilization and node_memory_utilization for demo-cluster over the last 24
-> hours?"*
+> *"What is the average CPU and memory utilization of the demo-cluster nodes?"*
 
 **Expect** CPU **avg 3.45%**, peak 53.45% · Memory **avg 39.27%**, peak 63.29%
 (verified 2026-08-20 13:05 +08). Peaks drift day to day; the averages are stable.
 
-⚠️ **Name the ClusterName dimension in the question.** Asked loosely, the agent tries a
-per-node query — and per-node node metrics require **`{ClusterName, NodeName, InstanceId}`
-all three together**. It has instance IDs from the Level 3a Athena query but no reliable
-node-name mapping, so it pairs them by guess, matches nothing, and reports
-*"metrics are not available for demo-cluster"* — which reads as uninstrumented and
-directly contradicts 3a. Verified failure mode 2026-08-20.
+⚠️ **This question failed in rehearsal and the persona was patched for it.** The agent
+tried a per-node query, built the `{NodeName, InstanceId}` pairing itself from the Level 3a
+Athena instance IDs, got it backwards, matched nothing, and reported *"metrics are not
+available for demo-cluster"* — a false negative on the one cluster that **is** instrumented,
+contradicting 3a and Q6. The persona now mandates `{ClusterName}` alone for cluster-level
+phrasing and forbids inventing the pairing. **Re-test this question after pasting the
+persona.** If it still says unavailable, fall back to asking *"using the ClusterName
+dimension only…"*.
 
 **Say:** the CPU/memory asymmetry is the useful part — memory is **11× more utilised than
 CPU**, so these nodes are memory-shaped and the CPU request is the thing that is wrong.
